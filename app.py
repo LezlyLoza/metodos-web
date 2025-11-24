@@ -2,51 +2,45 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-st.set_page_config(page_title="Test de Visión IA", page_icon="👁️")
+st.set_page_config(page_title="Diagnóstico Gemini", page_icon="🩺")
+st.title("🩺 Diagnóstico de Conexión Google")
 
-st.title(" Prueba de Visión Artificial")
-st.markdown("Este programa sirve para verificar qué está viendo la IA exactamente.")
-
-# 1. Configuración de API Key
-# Intentamos leer de Secrets, si no, pedimos manual
+# 1. API Key
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.success("✅ API Key detectada en el sistema.")
+    st.success("✅ API Key encontrada.")
 else:
-    api_key = st.text_input("Pega tu API Key de Google:", type="password")
+    api_key = st.text_input("API Key:", type="password")
 
-# 2. Subir Imagen
-uploaded_file = st.file_uploader("Sube la foto del examen", type=["jpg", "png", "jpeg", "webp"])
-
-if uploaded_file is not None and api_key:
+if api_key:
     try:
-        # Mostrar imagen subida
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Tu foto original", width=300)
+        genai.configure(api_key=api_key)
         
-        if st.button("🔍 Extraer Texto"):
-            with st.spinner("Consultando a Google Gemini..."):
-                # Configuración simple
-                genai.configure(api_key=api_key)
-                
-                # Probamos con el modelo estándar estable
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                
-                # Prompt simple: Solo transcribe
-                prompt = """
-                Tu única tarea es TRANSCRIBIR el contenido de esta imagen a texto.
-                - Si hay fórmulas matemáticas, escríbelas en formato LaTeX o Python.
-                - Si hay una matriz, escribe los números ordenados.
-                - No resuelvas nada, solo dime qué dice el texto.
-                """
-                
-                response = model.generate_content([prompt, image])
-                
-                st.subheader("Lo que la IA pudo leer:")
-                st.info(response.text)
-                
-                st.success("Si puedes leer el texto arriba, ¡la conexión funciona!")
+        # BOTÓN DE DIAGNÓSTICO
+        if st.button("📋 Listar Modelos Disponibles"):
+            st.info("Consultando a Google...")
+            modelos = []
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    modelos.append(m.name)
+            
+            st.write("### Tus modelos disponibles son:")
+            st.json(modelos)
+            
+            # Prueba automática con el primer modelo compatible
+            if 'models/gemini-1.5-flash' in modelos:
+                st.success("✅ ¡SÍ TIENES gemini-1.5-flash! Úsalo.")
+            elif 'models/gemini-1.5-flash-001' in modelos:
+                st.success("✅ Tienes la versión 001. Cambia el código a 'gemini-1.5-flash-001'.")
+            else:
+                st.error("❌ No veo el modelo Flash. Usa uno de la lista de arriba.")
 
     except Exception as e:
-        st.error(f"⚠️ Ocurrió un error: {e}")
-        st.warning("Si el error dice '404 Not Found', el modelo 'flash' no está disponible para tu clave. Intenta cambiar en el código 'gemini-1g.5-flash' por 'gemini-pro-vision'.")
+        st.error(f"Error grave de conexión: {e}")
+        st.warning("Si este error dice 'module not found', es el requirements.txt")
+
+# Subida de imagen simple para probar si la lista funciona
+uploaded = st.file_uploader("Sube foto para test final")
+if uploaded and st.button("Probar Visión") and api_key:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    st.write(model.generate_content(["Describe esto", Image.open(uploaded)]).text)

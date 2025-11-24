@@ -1,7 +1,3 @@
 streamlit
-pandas
-numpy
-sympy
-matplotlib
-google-generativeai>=0.8.3
+google-generativeai==0.8.3
 Pillow
