@@ -13,20 +13,17 @@ st.set_page_config(page_title="Metodos Numéricos Auto-Fill", layout="wide", pag
 # Función para inicializar variables de sesión
 def init_session():
     defaults = {
-        "nav_selection": "1. Raíces (Bisección/Newton)",
-        # Datos Bisección
-        "bis_func": "0.95*x**3 - 5.9*x**2 + 10.9*x - 6",
-        "bis_a": 3.0, "bis_b": 4.0,
-        # Datos Newton
+        "nav_selection": "1. Raíces (Bisección/Newton)", 
+        # Variables de datos
+        "bis_func": "0.95*x**3 - 5.9*x**2 + 10.9*x - 6", "bis_a": 3.0, "bis_b": 4.0,
         "newton_func": "0.95*x**3 - 5.9*x**2 + 10.9*x - 6", "newton_x0": 3.5,
-        # Datos Sistemas
         "m_a11": 5.0, "m_a12": 1.0, "m_a13": -15.0, "m_b1": 5.0,
         "m_a21": 13.0, "m_a22": 3.0, "m_a23": 9.0, "m_b2": 30.0,
         "m_a31": 1.0, "m_a32": 4.0, "m_a33": 2.0, "m_b3": 15.0,
-        # Datos Integración
         "int_func": "(5*x**3 + x) / sqrt(3*x**2 + 5)", "int_a": 1.0, "int_b": 5.0,
-        # Datos Derivada
-        "der_func": "sqrt(5*x**3 + 1)", "der_x": 1.3, "der_h": 0.1
+        "der_func": "sqrt(5*x**3 + 1)", "der_x": 1.3, "der_h": 0.1,
+        # NUEVO: Guardar las opciones detectadas (a, b, c) de la foto
+        "opciones_detectadas": {} 
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -34,68 +31,97 @@ def init_session():
 
 init_session()
 
-# --- 2. LÓGICA DE IA (Usando Gemini 2.5 Flash) ---
+# --- FUNCIÓN DE COMPARACIÓN INTELIGENTE ---
+def mostrar_inciso_correcto(resultado_calculado):
+    opciones = st.session_state.opciones_detectadas
+    if not opciones:
+        return # No hay opciones para comparar
+    
+    st.divider()
+    st.markdown("### 🎯 Veredicto de la IA + Python")
+    
+    mejor_opcion = None
+    menor_diferencia = float('inf')
+    
+    # Buscar cuál opción está más cerca del resultado calculado
+    for letra, valor in opciones.items():
+        try:
+            diff = abs(resultado_calculado - float(valor))
+            if diff < menor_diferencia:
+                menor_diferencia = diff
+                mejor_opcion = letra
+        except:
+            pass # Ignorar si la opción no es número
+
+    if mejor_opcion:
+        # Mostrar en grande y verde
+        st.success(f"✅ La respuesta correcta es la opción **{mejor_opcion.upper()}** ({opciones[mejor_opcion]})")
+        st.caption(f"Calculado: {resultado_calculado:.6f} | Diferencia: {menor_diferencia:.6f}")
+    else:
+        st.warning("No pude coincidir el resultado con las opciones de la imagen.")
+
+# --- 2. LÓGICA DE IA (DETECTIVE) ---
 def analizar_imagen_con_ia(api_key, image):
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    
+    prompt = """
+    Analiza esta imagen de examen.
+    1. Extrae los datos matemáticos.
+    2. IMPORTANTE: Extrae las opciones de respuesta (a, b, c, d) si existen.
+    3. Devuelve SOLO JSON.
+    
+    Formato JSON:
+    {
+        "metodo": "biseccion" | "newton" | "gauss_seidel" | "integracion" | "derivada",
+        "func": "ecuacion en python",
+        ... (datos especificos del metodo),
+        "opciones": {"a": 1.23, "b": 1.24, "c": 1.25}  <-- SOLO NUMEROS
+    }
+    
+    Si es Bisección: {"metodo": "biseccion", "func": "...", "a": float, "b": float, "opciones": {...}}
+    Si es Newton: {"metodo": "newton", "func": "...", "x0": float, "opciones": {...}}
+    Si es Gauss: {"metodo": "gauss_seidel", "matrix": [...], "opciones": {...}}
+    Si es Integración: {"metodo": "integracion", "func": "...", "a": float, "b": float, "opciones": {...}}
+    Si es Derivada: {"metodo": "derivada", "func": "...", "x": float, "h": float, "opciones": {...}}
+    """
+    
     try:
-        genai.configure(api_key=api_key)
-        
-        # --- AQUÍ ESTÁ EL CAMBIO CLAVE: USAMOS TU MODELO DISPONIBLE ---
-        model = genai.GenerativeModel('gemini-2.5-flash') 
-        # --------------------------------------------------------------
-        
-        prompt = """
-        Eres un asistente matemático para un examen de ingeniería.
-        Tu tarea es EXTRAER los datos de la imagen para llenar un formulario.
-        Responde ÚNICAMENTE con un JSON válido. Sin texto antes ni después.
-        
-        Reglas de conversión:
-        - Detecta el método: "biseccion", "newton", "gauss_seidel", "integracion", "derivada".
-        - Matemáticas a Python: x^2 -> x**2, sen(x) -> np.sin(x), raíz(x) -> sqrt(x).
-        
-        Formatos JSON esperados:
-        - Bisección: {"metodo": "biseccion", "func": "...", "a": 3.0, "b": 4.0}
-        - Newton: {"metodo": "newton", "func": "...", "x0": 3.5}
-        - Gauss-Seidel (Matriz 3x3): {"metodo": "gauss_seidel", "matrix": [[a11, a12, a13, b1], [a21, a22, a23, b2], [a31, a32, a33, b3]]}
-        - Integración: {"metodo": "integracion", "func": "...", "a": 1.0, "b": 5.0}
-        - Derivada: {"metodo": "derivada", "func": "...", "x": 1.3, "h": 0.1}
-        """
-        
         response = model.generate_content([prompt, image])
-        
-        # Limpieza agresiva del JSON por si la IA habla de más
-        texto_limpio = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(texto_limpio)
-        
+        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        return json.loads(clean_text)
     except Exception as e:
-        st.sidebar.error(f"Error de lectura IA: {e}")
+        st.sidebar.error(f"Error IA: {e}")
         return None
 
-# --- 3. BARRA LATERAL (SCANNER) ---
+# --- 3. BARRA LATERAL ---
 with st.sidebar:
-    st.title("🤖 Auto-Scanner 2.5")
+    st.title("🤖 Auto-Scanner Pro")
     
     if "GOOGLE_API_KEY" in st.secrets:
         api_key = st.secrets["GOOGLE_API_KEY"]
-        st.success("✅ Conectado a Gemini 2.5")
+        st.success("API Key Conectada")
     else:
-        api_key = st.text_input("API Key", type="password")
+        api_key = st.text_input("API Key Google", type="password")
 
-    uploaded_file = st.file_uploader("📷 Subir Foto Examen", type=["jpg", "png", "jpeg"])
+    uploaded_file = st.file_uploader("📷 Subir Examen", type=["jpg", "png", "jpeg"])
     
     if uploaded_file and api_key:
-        if st.button("🚀 Escanear y Llenar"):
-            with st.spinner("Analizando con Gemini 2.5 Flash..."):
+        if st.button("🚀 Escanear y Preparar"):
+            with st.spinner("Analizando opciones e inciso correcto..."):
                 img = Image.open(uploaded_file)
                 datos = analizar_imagen_con_ia(api_key, img)
                 
                 if datos:
                     try:
                         metodo = datos.get("metodo")
+                        st.session_state.opciones_detectadas = datos.get("opciones", {})
                         
                         if metodo == "biseccion":
                             st.session_state.nav_selection = "1. Raíces (Bisección/Newton)"
                             st.session_state.bis_func = datos['func']
-                            st.session_state.bis_a = float(datos['a']); st.session_state.bis_b = float(datos['b'])
+                            st.session_state.bis_a = float(datos['a'])
+                            st.session_state.bis_b = float(datos['b'])
                             
                         elif metodo == "newton":
                             st.session_state.nav_selection = "1. Raíces (Bisección/Newton)"
@@ -112,111 +138,174 @@ with st.sidebar:
                         elif metodo == "integracion":
                             st.session_state.nav_selection = "3. Integración (Simpson/Gauss)"
                             st.session_state.int_func = datos['func']
-                            st.session_state.int_a = float(datos['a']); st.session_state.int_b = float(datos['b'])
+                            st.session_state.int_a = float(datos['a'])
+                            st.session_state.int_b = float(datos['b'])
 
                         elif metodo == "derivada":
                             st.session_state.nav_selection = "4. Derivación Numérica"
                             st.session_state.der_func = datos['func']
-                            st.session_state.der_x = float(datos['x']); st.session_state.der_h = float(datos['h'])
+                            st.session_state.der_x = float(datos['x'])
+                            st.session_state.der_h = float(datos['h'])
                             
-                        st.success("✅ ¡Datos detectados! Revisa los campos.")
+                        st.toast("✅ ¡Datos y Opciones extraídos!")
                         st.rerun()
                         
                     except Exception as e:
-                        st.error(f"Error interpretando datos: {e}")
+                        st.error(f"Error procesando datos: {e}")
 
     st.divider()
-    seccion = st.radio("Navegación Manual:", 
-        ["1. Raíces (Bisección/Newton)", "2. Sistemas Lineales (Gauss-Seidel)", 
-         "3. Integración (Simpson/Gauss)", "4. Derivación Numérica"],
-        key="nav_selection")
+    seccion = st.radio("Ir a:", ["1. Raíces (Bisección/Newton)", "2. Sistemas Lineales (Gauss-Seidel)", "3. Integración (Simpson/Gauss)", "4. Derivación Numérica"], key="nav_selection")
+
+    # Mostrar las opciones que la IA vió (para verificar)
+    if st.session_state.opciones_detectadas:
+        st.info(f"Opciones detectadas en foto: {st.session_state.opciones_detectadas}")
 
 # --- 4. CALCULADORAS ---
 
 # UNIDAD 1: RAÍCES
 if st.session_state.nav_selection == "1. Raíces (Bisección/Newton)":
-    st.header("🔍 Raíces")
-    tabs = st.tabs(["Bisección", "Newton"])
-    with tabs[0]:
+    st.header("🔍 Raíces de Ecuaciones")
+    tabs = st.tabs(["Bisección", "Newton-Raphson"])
+    
+    with tabs[0]: # BISECCIÓN
+        f_txt = st.text_input("Función f(x):", key="bis_func")
         c1, c2 = st.columns(2)
-        f_txt = c1.text_input("f(x):", key="bis_func")
-        a = c2.number_input("a:", key="bis_a"); b = c2.number_input("b:", key="bis_b")
+        a_val = c1.number_input("Límite a:", key="bis_a")
+        b_val = c2.number_input("Límite b:", key="bis_b")
+        tol = st.number_input("Tolerancia:", value=0.0001, format="%.5f")
+        
         if st.button("Calcular Bisección"):
             try:
-                x = sp.symbols('x'); f = sp.lambdify(x, sp.sympify(f_txt), "numpy")
-                if f(a)*f(b)>=0: st.error("Mismo signo en límites")
+                x = sp.symbols('x')
+                f = sp.lambdify(x, sp.sympify(f_txt), "numpy")
+                if f(a_val)*f(b_val) >= 0: st.error("Error: Mismo signo.")
                 else:
-                    res=[]; xr_ant=0
+                    xr_ant = 0; a, b = a_val, b_val
+                    xr_final = 0
+                    datos = []
                     for i in range(20):
-                        xr=(a+b)/2; fxr=f(xr); err=abs((xr-xr_ant)/xr)*100 if i>0 else 100
-                        res.append({"Iter":i, "a":a, "b":b, "xr":xr, "f(xr)":fxr, "Err %":err})
-                        if abs(fxr)<0.0001: break
-                        if f(a)*fxr<0: b=xr
-                        else: a=xr
-                        xr_ant=xr
-                    st.dataframe(pd.DataFrame(res))
-            except Exception as e: st.error(e)
-    with tabs[1]:
-        c1, c2 = st.columns(2)
-        fn = c1.text_input("f(x):", key="newton_func")
-        x0 = c2.number_input("x0:", key="newton_x0")
-        if st.button("Calcular Newton"):
-            try:
-                x=sp.symbols('x'); f_e=sp.sympify(fn); f=sp.lambdify(x,f_e); df=sp.lambdify(x,sp.diff(f_e,x))
-                res=[]; xi=x0
-                for i in range(10):
-                    fxi=f(xi); dfxi=df(xi)
-                    if dfxi==0: break
-                    xn=xi-(fxi/dfxi); err=abs((xn-xi)/xn)*100 if i>0 else 100
-                    res.append({"Iter":i, "xi":xi, "f(xi)":fxi, "Err %":err})
-                    xi=xn
-                st.dataframe(pd.DataFrame(res))
+                        xr = (a + b) / 2
+                        fxr = f(xr)
+                        datos.append({"Iter": i, "xr": xr, "f(xr)": fxr})
+                        if abs(fxr) < tol: break
+                        if f(a)*fxr < 0: b = xr
+                        else: a = xr
+                        xr_final = xr
+                    
+                    # MAGIA: MOSTRAR INCISO CORRECTO
+                    mostrar_inciso_correcto(xr_final)
+                    
+                    st.dataframe(pd.DataFrame(datos))
             except Exception as e: st.error(e)
 
-# UNIDAD 2: GAUSS-SEIDEL
-elif st.session_state.nav_selection == "2. Sistemas Lineales (Gauss-Seidel)":
-    st.header("⛓️ Gauss-Seidel 3x3")
-    c1, c2, c3, c4 = st.columns(4)
-    a11=c1.number_input("a11", key="m_a11"); a12=c2.number_input("a12", key="m_a12"); a13=c3.number_input("a13", key="m_a13"); b1=c4.number_input("b1", key="m_b1")
-    a21=c1.number_input("a21", key="m_a21"); a22=c2.number_input("a22", key="m_a22"); a23=c3.number_input("a23", key="m_a23"); b2=c4.number_input("b2", key="m_b2")
-    a31=c1.number_input("a31", key="m_a31"); a32=c2.number_input("a32", key="m_a32"); a33=c3.number_input("a33", key="m_a33"); b3=c4.number_input("b3", key="m_b3")
-    
-    if st.button("Iterar"):
-        x1,x2,x3=0.0,0.0,0.0; res=[]
-        for k in range(5):
+    with tabs[1]: # NEWTON
+        f_new = st.text_input("Función f(x):", key="newton_func")
+        x0_val = st.number_input("Valor inicial x0:", key="newton_x0")
+        if st.button("Calcular Newton"):
             try:
-                x1=(b1-a12*x2-a13*x3)/a11; x2=(b2-a21*x1-a23*x3)/a22; x3=(b3-a31*x1-a32*x2)/a33
-                res.append({"Iter":k+1, "x1":x1, "x2":x2, "x3":x3})
-            except: pass
-        st.dataframe(pd.DataFrame(res))
+                x = sp.symbols('x')
+                f_expr = sp.sympify(f_new); df_expr = sp.diff(f_expr, x)
+                f = sp.lambdify(x, f_expr); df = sp.lambdify(x, df_expr)
+                xi = x0_val
+                for i in range(10):
+                    xi_new = xi - (f(xi)/df(xi))
+                    xi = xi_new
+                
+                # MAGIA: MOSTRAR INCISO CORRECTO
+                mostrar_inciso_correcto(xi)
+                st.write(f"Raíz final: {xi}")
+            except Exception as e: st.error(e)
+
+# UNIDAD 2: SISTEMAS
+elif st.session_state.nav_selection == "2. Sistemas Lineales (Gauss-Seidel)":
+    st.header("⛓️ Gauss-Seidel")
+    c1, c2, c3, c4 = st.columns(4)
+    a11 = c1.number_input("a11", key="m_a11"); a12 = c2.number_input("a12", key="m_a12"); a13 = c3.number_input("a13", key="m_a13"); b1 = c4.number_input("b1", key="m_b1")
+    a21 = c1.number_input("a21", key="m_a21"); a22 = c2.number_input("a22", key="m_a22"); a23 = c3.number_input("a23", key="m_a23"); b2 = c4.number_input("b2", key="m_b2")
+    a31 = c1.number_input("a31", key="m_a31"); a32 = c2.number_input("a32", key="m_a32"); a33 = c3.number_input("a33", key="m_a33"); b3 = c4.number_input("b3", key="m_b3")
+    
+    iters = st.number_input("Iteraciones a comprobar:", value=3)
+
+    if st.button("Calcular Gauss-Seidel"):
+        x1, x2, x3 = 0.0, 0.0, 0.0
+        for k in range(int(iters)):
+            x1 = (b1 - a12*x2 - a13*x3) / a11
+            x2 = (b2 - a21*x1 - a23*x3) / a22
+            x3 = (b3 - a31*x1 - a32*x2) / a33
+        
+        # MAGIA: Comparamos x1 (puedes ajustar para comparar x2 o x3 si la pregunta es específica)
+        st.write(f"Resultados iteración {iters}: x1={x1:.4f}, x2={x2:.4f}, x3={x3:.4f}")
+        
+        # Intentamos buscar coincidencia con cualquiera de los valores
+        opciones = st.session_state.opciones_detectadas
+        if opciones:
+            st.divider()
+            st.markdown("### 🎯 Coincidencias encontradas")
+            found = False
+            for let, val in opciones.items():
+                # Revisa si la opción coincide con x1, x2 o x3
+                if abs(x1 - val) < 0.1 or abs(x2 - val) < 0.1 or abs(x3 - val) < 0.1:
+                    st.success(f"✅ La opción **{let.upper()}** ({val}) coincide con uno de los resultados.")
+                    found = True
+            if not found: st.warning("No encontré coincidencia exacta con las opciones.")
 
 # UNIDAD 3: INTEGRACIÓN
 elif st.session_state.nav_selection == "3. Integración (Simpson/Gauss)":
     st.header("∫ Integración")
-    fi = st.text_input("f(x):", key="int_func")
+    f_int = st.text_input("Función:", key="int_func")
     c1, c2 = st.columns(2)
-    ai = c1.number_input("a:", key="int_a"); bi = c2.number_input("b:", key="int_b")
-    met = st.selectbox("Método", ["Gauss-Legendre (2pt)", "Simpson 1/3"])
-    if st.button("Integrar"):
+    a_int = c1.number_input("Límite a:", key="int_a")
+    b_int = c2.number_input("Límite b:", key="int_b")
+    metodo = st.selectbox("Método", ["Gauss-Legendre (2 puntos)", "Simpson 1/3"])
+    
+    if st.button("Calcular Área"):
         try:
-            x=sp.symbols('x'); f=sp.lambdify(x,sp.sympify(fi),"numpy")
-            if "Gauss" in met:
-                t=0.577350269; dx=(bi-ai)/2; avg=(bi+ai)/2
-                st.success(f"Resultado: {dx*(f(avg-dx*t)+f(avg+dx*t)):.6f}")
+            x = sp.symbols('x')
+            f = sp.lambdify(x, sp.sympify(f_int), "numpy")
+            res = 0
+            if metodo == "Gauss-Legendre (2 puntos)":
+                t = 0.577350269; dx = (b_int - a_int)/2; avg = (b_int + a_int)/2
+                res = dx * (f(dx*(-t) + avg) + f(dx*t + avg))
             else:
-                h=(bi-ai)/10; xv=np.linspace(ai,bi,11); yv=f(xv)
-                res=(h/3)*(yv[0]+yv[-1]+4*sum(yv[1:-1:2])+2*sum(yv[2:-2:2]))
-                st.success(f"Resultado: {res:.6f}")
+                h = (b_int - a_int)/10; xv = np.linspace(a_int, b_int, 11); yv = f(xv)
+                res = (h/3) * (yv[0] + yv[-1] + 4*sum(yv[1:-1:2]) + 2*sum(yv[2:-2:2]))
+            
+            # MAGIA: MOSTRAR INCISO CORRECTO
+            mostrar_inciso_correcto(res)
+            
         except Exception as e: st.error(e)
 
 # UNIDAD 4: DERIVADA
 elif st.session_state.nav_selection == "4. Derivación Numérica":
-    st.header("∂ Derivada")
-    fd = st.text_input("f(x):", key="der_func")
+    st.header("∂ Derivación")
+    f_der = st.text_input("Función:", key="der_func")
     c1, c2 = st.columns(2)
-    xd = c1.number_input("x:", key="der_x"); hd = c2.number_input("h:", key="der_h")
-    if st.button("Derivar"):
+    xi = c1.number_input("Punto x:", key="der_x")
+    h = c2.number_input("Paso h:", key="der_h")
+    
+    if st.button("Calcular Derivada"):
         try:
-            x=sp.symbols('x'); f=sp.lambdify(x,sp.sympify(fd),"numpy")
-            st.metric("Resultado", f"{(f(xd+hd)-f(xd-hd))/(2*hd):.5f}")
+            x = sp.symbols('x')
+            f = sp.lambdify(x, sp.sympify(f_der), "numpy")
+            # Calculamos ambas (1ra y 2da) para ver cuál pide el examen
+            res1 = (f(xi+h) - f(xi-h))/(2*h)
+            res2 = (f(xi+h) - 2*f(xi) + f(xi-h))/(h**2)
+            
+            st.write(f"1ra Derivada: {res1:.5f}")
+            st.write(f"2da Derivada: {res2:.5f}")
+            
+            # MAGIA: Comparar con ambas
+            opciones = st.session_state.opciones_detectadas
+            if opciones:
+                st.divider()
+                match = False
+                for let, val in opciones.items():
+                    if abs(res1 - val) < 0.01:
+                        st.success(f"✅ Opción **{let.upper()}** es la correcta (corresponde a 1ra Derivada).")
+                        match = True
+                    elif abs(res2 - val) < 0.01:
+                        st.success(f"✅ Opción **{let.upper()}** es la correcta (corresponde a 2da Derivada).")
+                        match = True
+                if not match: st.warning("No encontré coincidencias.")
+                
         except Exception as e: st.error(e)
