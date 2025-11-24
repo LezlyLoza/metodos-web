@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import sympy as sp
 import matplotlib.pyplot as plt
+import google.generativeai as genai
+from PIL import Image
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Metodos Numéricos 2025", layout="wide", page_icon="🧮")
@@ -16,7 +18,8 @@ seccion = st.sidebar.radio(
      "2. Sistemas Lineales (Gauss-Seidel)", 
      "3. Integración (Simpson/Gauss)", 
      "4. Derivación Numérica",
-     "5. Series de Taylor"]
+     "5. Series de Taylor",
+     "📸 Resolver con Foto (IA)"]
 )
 
 # ==========================================
@@ -29,6 +32,7 @@ if seccion == "1. Raíces (Bisección/Newton)":
     col1, col2 = st.columns(2)
     with col1:
         funcion_str = st.text_input("Función f(x):", "0.95*x**3 - 5.9*x**2 + 10.9*x - 6")
+        st.caption("Nota: Usa ** para potencias (ej: x**2)")
     
     if metodo == "Método de Bisección":
         with col2:
@@ -42,7 +46,7 @@ if seccion == "1. Raíces (Bisección/Newton)":
                 f = sp.lambdify(x_sym, sp.sympify(funcion_str))
                 
                 if f(a)*f(b) >= 0:
-                    st.error("⚠️ f(a) y f(b) tienen el mismo signo. Revisa el intervalo.")
+                    st.error("⚠️ Error: f(a) y f(b) tienen el mismo signo. El método no garantiza convergencia.")
                 else:
                     datos = []
                     xr_ant = 0
@@ -56,7 +60,9 @@ if seccion == "1. Raíces (Bisección/Newton)":
                         if f(a)*fxr < 0: b = xr
                         else: a = xr
                         xr_ant = xr
+                    
                     st.dataframe(pd.DataFrame(datos).style.format(precision=5))
+                    st.success(f"Raíz aproximada: {xr:.5f}")
             except Exception as e: st.error(f"Error: {e}")
 
     elif metodo == "Newton-Raphson":
@@ -87,8 +93,9 @@ if seccion == "1. Raíces (Bisección/Newton)":
                     xi = xi_new
                     if error < tol: break
                 
-                st.info(f"Derivada usada: {df_expr}")
+                st.info(f"Derivada calculada: {df_expr}")
                 st.dataframe(pd.DataFrame(datos).style.format(precision=5))
+                st.success(f"Raíz aproximada: {xi:.5f}")
             except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
@@ -98,6 +105,7 @@ elif seccion == "2. Sistemas Lineales (Gauss-Seidel)":
     st.header("⛓️ Sistemas de Ecuaciones (Gauss-Seidel)")
     st.markdown("Resuelve sistemas de 3x3. **Nota:** Verifica si es diagonalmente dominante.")
     
+    st.write("Ingrese los coeficientes de la Matriz A y el vector B:")
     c1, c2, c3, c4 = st.columns(4)
     # Fila 1
     a11 = c1.number_input("a11", 5.0); a12 = c2.number_input("a12", 1.0); a13 = c3.number_input("a13", -15.0); b1 = c4.number_input("b1", 5.0)
@@ -114,12 +122,8 @@ elif seccion == "2. Sistemas Lineales (Gauss-Seidel)":
         resultados = []
         
         for k in range(iters):
-            # Importante: usar los valores nuevos apenas se calculan (Seidel)
-            # Nota: Aquí NO estamos reordenando filas automáticamente, es literal como entra
             try:
-                x1_old, x2_old, x3_old = x1, x2, x3
-                
-                # Despejes asumiendo orden 1, 2, 3
+                # Seidel actualiza inmediatamente los valores
                 x1 = (b1 - a12*x2 - a13*x3) / a11
                 x2 = (b2 - a21*x1 - a23*x3) / a22
                 x3 = (b3 - a31*x1 - a32*x2) / a33
@@ -129,7 +133,7 @@ elif seccion == "2. Sistemas Lineales (Gauss-Seidel)":
                     "x1": x1, "x2": x2, "x3": x3
                 })
             except ZeroDivisionError:
-                st.error("Error: División por cero en la diagonal. Reordena las filas.")
+                st.error("Error: División por cero en la diagonal. Reordena las filas para que los números mayores estén en la diagonal.")
                 break
                 
         st.dataframe(pd.DataFrame(resultados).style.format(precision=4))
@@ -142,13 +146,14 @@ elif seccion == "3. Integración (Simpson/Gauss)":
     metodo_int = st.selectbox("Método", ["Simpson 1/3", "Gauss-Legendre (2 puntos)"])
     
     func_int = st.text_input("Función a integrar:", "(5*x**3 + x) / sqrt(3*x**2 + 5)")
+    st.caption("Recuerda usar `sqrt()` para raíces.")
     
     col_a, col_b = st.columns(2)
     a_int = col_a.number_input("Límite inferior (a):", 1.0)
     b_int = col_b.number_input("Límite superior (b):", 5.0)
     
     if metodo_int == "Simpson 1/3":
-        n = st.number_input("Número de segmentos (n par):", value=10, step=2)
+        n = st.number_input("Número de segmentos (n debe ser par):", value=10, step=2)
         if st.button("Calcular Área"):
             try:
                 x = sp.symbols('x')
@@ -165,7 +170,7 @@ elif seccion == "3. Integración (Simpson/Gauss)":
             except Exception as e: st.error(e)
             
     elif metodo_int == "Gauss-Legendre (2 puntos)":
-        st.caption("Usa la transformación t en [-1, 1]")
+        st.caption("Usa la transformación estándar al intervalo [-1, 1]")
         if st.button("Calcular Gauss"):
             try:
                 x_sym = sp.symbols('x')
@@ -183,10 +188,13 @@ elif seccion == "3. Integración (Simpson/Gauss)":
                 x0_real = dx*t0 + avg
                 x1_real = dx*t1 + avg
                 
-                integral = dx * (c0*f(x0_real) + c1*f(x1_real))
+                val0 = f(x0_real)
+                val1 = f(x1_real)
                 
-                st.write(f"x0 transformado: {x0_real:.4f} | f(x0): {f(x0_real):.4f}")
-                st.write(f"x1 transformado: {x1_real:.4f} | f(x1): {f(x1_real):.4f}")
+                integral = dx * (c0*val0 + c1*val1)
+                
+                st.write(f"t0 = -0.5774 -> x0 = {x0_real:.4f} -> f(x0) = {val0:.4f}")
+                st.write(f"t1 = +0.5774 -> x1 = {x1_real:.4f} -> f(x1) = {val1:.4f}")
                 st.success(f"Resultado Gauss-Legendre: **{integral:.6f}**")
             except Exception as e: st.error(e)
 
@@ -195,7 +203,7 @@ elif seccion == "3. Integración (Simpson/Gauss)":
 # ==========================================
 elif seccion == "4. Derivación Numérica":
     st.header("∂ Derivación Numérica")
-    st.markdown("Calcula la derivada aproximada usando diferencias.")
+    st.markdown("Calcula la derivada usando diferencias centrales.")
     
     func_der = st.text_input("Función:", "sqrt(5*x**3 + 1)")
     
@@ -209,18 +217,23 @@ elif seccion == "4. Derivación Numérica":
             x = sp.symbols('x')
             f = sp.lambdify(x, sp.sympify(func_der), "numpy")
             
+            val_x = f(xi_der)
+            val_x_plus = f(xi_der + h_der)
+            val_x_minus = f(xi_der - h_der)
+            
             if orden == "Primera Derivada (Central)":
-                res = (f(xi_der + h_der) - f(xi_der - h_der)) / (2*h_der)
-                st.info(f"Fórmula: [f(x+h) - f(x-h)] / 2h")
+                res = (val_x_plus - val_x_minus) / (2*h_der)
+                st.info("Fórmula: [f(x+h) - f(x-h)] / 2h")
+                st.write(f"f(x+h) = {val_x_plus:.6f}")
+                st.write(f"f(x-h) = {val_x_minus:.6f}")
             else:
-                res = (f(xi_der + h_der) - 2*f(xi_der) + f(xi_der - h_der)) / (h_der**2)
-                st.info(f"Fórmula: [f(x+h) - 2f(x) + f(x-h)] / h²")
+                res = (val_x_plus - 2*val_x + val_x_minus) / (h_der**2)
+                st.info("Fórmula: [f(x+h) - 2f(x) + f(x-h)] / h²")
+                st.write(f"f(x+h) = {val_x_plus:.6f}")
+                st.write(f"f(x)   = {val_x:.6f}")
+                st.write(f"f(x-h) = {val_x_minus:.6f}")
             
             st.metric(label="Resultado Numérico", value=f"{res:.5f}")
-            
-            # Comprobación Real
-            val_real = sp.diff(sp.sympify(func_der), x, 1 if "Primera" in orden else 2).subs(x, xi_der)
-            st.caption(f"Valor exacto analítico (referencia): {float(val_real):.5f}")
             
         except Exception as e: st.error(e)
 
@@ -230,7 +243,7 @@ elif seccion == "4. Derivación Numérica":
 elif seccion == "5. Series de Taylor":
     st.header("📈 Series de Taylor/Maclaurin")
     f_taylor = st.text_input("Función:", "6*x**5 - 3*x**3 + 2")
-    n_terms = st.slider("Número de términos:", 1, 6, 3)
+    n_terms = st.slider("Número de términos:", 1, 8, 3)
     
     if st.button("Generar Serie"):
         x = sp.symbols('x')
@@ -239,5 +252,47 @@ elif seccion == "5. Series de Taylor":
             serie = sp.series(expr, x, 0, n_terms).removeO()
             st.subheader("Polinomio Resultante:")
             st.latex(sp.latex(serie))
-            st.write(f"Expresión en texto: {serie}")
+            st.write(f"Expresión plana: {serie}")
         except Exception as e: st.error(e)
+
+# ==========================================
+# NUEVA SECCIÓN: IA VISUAL (GEMINI)
+# ==========================================
+elif seccion == "📸 Resolver con Foto (IA)":
+    st.header("🤖 Detective de Ejercicios")
+    st.markdown("Sube una foto de tu examen y la IA detectará el método y lo resolverá.")
+    
+    # Campo para la API Key
+    api_key = st.text_input("Pega tu Google API Key:", type="password", help="Obtén tu clave en aistudio.google.com")
+    
+    # Subir imagen
+    uploaded_file = st.file_uploader("Sube la imagen del problema", type=["jpg", "png", "jpeg", "webp"])
+
+    if uploaded_file is not None and api_key:
+        try:
+            # Configurar la IA
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            image = Image.open(uploaded_file)
+            st.image(image, caption='Imagen subida', width=300)
+            
+            if st.button("🔍 Analizar y Resolver"):
+                with st.spinner('La IA está pensando... (esto tarda unos segundos)'):
+                    prompt = """
+                    Actúa como un profesor experto en Métodos Numéricos.
+                    1. Analiza la imagen y DETECTA qué método numérico se pide (Bisección, Newton, Gauss, Derivada, etc.).
+                    2. Extrae los datos numéricos (función, límites, etc.).
+                    3. RESUELVE el ejercicio paso a paso.
+                    4. Si es un método iterativo, genera una TABLA en formato Markdown.
+                    5. Dame el resultado final claro.
+                    """
+                    response = model.generate_content([prompt, image])
+                    st.markdown(response.text)
+                    
+        except Exception as e:
+            st.error(f"Error de conexión con la IA: {e}")
+            st.warning("Verifica que tu API Key sea correcta y tenga permisos.")
+    
+    elif uploaded_file and not api_key:
+        st.warning("⚠️ Necesitas ingresar tu API Key para procesar la imagen.")
