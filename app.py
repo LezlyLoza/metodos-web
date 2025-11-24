@@ -261,10 +261,13 @@ elif seccion == "5. Series de Taylor":
 elif seccion == "📸 Resolver con Foto (IA)":
     st.header("🤖 Detective de Ejercicios")
     st.markdown("Sube una foto de tu examen y la IA detectará el método y lo resolverá.")
-    
+   
     # Campo para la API Key
-    api_key = st.text_input("Pega tu Google API Key:", type="password", help="Obtén tu clave en aistudio.google.com")
-    
+    if "GOOGLE_API_KEY" in st.secrets:
+        api_key = st.secrets["GOOGLE_API_KEY"]
+        st.success("✅ Llave de Google conectada automáticamente.")
+    else:
+        api_key = st.text_input("Pega tu Google API Key:", type="password")
     # Subir imagen
     uploaded_file = st.file_uploader("Sube la imagen del problema", type=["jpg", "png", "jpeg", "webp"])
 
