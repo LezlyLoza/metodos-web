@@ -4,7 +4,7 @@ from PIL import Image
 
 st.set_page_config(page_title="Test de Visión IA", page_icon="👁️")
 
-st.title("👁️ Prueba de Visión Artificial")
+st.title(" Prueba de Visión Artificial")
 st.markdown("Este programa sirve para verificar qué está viendo la IA exactamente.")
 
 # 1. Configuración de API Key
@@ -42,11 +42,11 @@ if uploaded_file is not None and api_key:
                 
                 response = model.generate_content([prompt, image])
                 
-                st.subheader("📝 Lo que la IA pudo leer:")
+                st.subheader("Lo que la IA pudo leer:")
                 st.info(response.text)
                 
                 st.success("Si puedes leer el texto arriba, ¡la conexión funciona!")
 
     except Exception as e:
         st.error(f"⚠️ Ocurrió un error: {e}")
-        st.warning("Si el error dice '404 Not Found', el modelo 'flash' no está disponible para tu clave. Intenta cambiar en el código 'gemini-1g.5-flash' por 'gemini-pro-vision'.")gi
+        st.warning("Si el error dice '404 Not Found', el modelo 'flash' no está disponible para tu clave. Intenta cambiar en el código 'gemini-1g.5-flash' por 'gemini-pro-vision'.")
