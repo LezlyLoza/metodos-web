@@ -27,7 +27,7 @@ def init_session():
 
 init_session()
 
-# --- FUNCIÓN DE COMPARACIÓN DE INCISOS ---
+# --- FUNCIÓN MEJORADA: COMPARACIÓN DE INCISOS ---
 def mostrar_inciso_correcto(resultado_calculado):
     opciones = st.session_state.opciones_detectadas
     if not opciones: return
@@ -37,21 +37,33 @@ def mostrar_inciso_correcto(resultado_calculado):
     
     mejor_opcion = None
     menor_diferencia = float('inf')
+    found_number = False
     
     for letra, valor in opciones.items():
         try:
-            diff = abs(resultado_calculado - float(valor))
+            # LIMPIEZA DE DATOS:
+            # 1. Intentamos convertir a float
+            # 2. Reemplazamos comas por puntos por si acaso (ej: 3,5 -> 3.5)
+            val_limpio = str(valor).replace(",", ".")
+            val_float = float(val_limpio)
+            
+            diff = abs(resultado_calculado - val_float)
             if diff < menor_diferencia:
                 menor_diferencia = diff
                 mejor_opcion = letra
-        except: pass
+            found_number = True
+        except ValueError:
+            # Si el valor es "Verdadero", "Falso" o texto, entra aquí y lo ignora
+            continue
 
-    if mejor_opcion and menor_diferencia < 1.0: 
+    # Solo mostramos veredicto si encontró números y la diferencia es pequeña
+    if found_number and mejor_opcion and menor_diferencia < 1.0: 
         st.success(f"✅ La respuesta correcta es la opción **{mejor_opcion.upper()}** ({opciones[mejor_opcion]})")
-        st.caption(f"Cálculo exacto: {resultado_calculado:.6f}")
+        st.caption(f"Cálculo exacto: {resultado_calculado:.6f} | Diferencia: {menor_diferencia:.6f}")
+    elif not found_number:
+        st.info("ℹ️ Las opciones detectadas son texto (Verdadero/Falso). Compara manualmente con el resultado de arriba.")
     else:
-        st.warning(f"El resultado ({resultado_calculado:.4f}) no parece coincidir con ninguna opción detectada.")
-
+        st.warning(f"El resultado ({resultado_calculado:.4f}) no parece coincidir con ninguna opción numérica detectada.")
 # --- 2. LÓGICA DE IA (SELECTOR DE TU LISTA) ---
 def analizar_imagen_con_ia(api_key, image):
     genai.configure(api_key=api_key)
