@@ -30,7 +30,7 @@ if uploaded_file is not None and api_key:
                 genai.configure(api_key=api_key)
                 
                 # Probamos con el modelo estándar estable
-                model = genai.GenerativeModel('gemini-pro-vision')
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 # Prompt simple: Solo transcribe
                 prompt = """
