@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-st.set_page_congfig(page_title="Test de Visión IA", page_icon="👁️")
+st.set_page_config(page_title="Test de Visión IA", page_icon="👁️")
 
 st.title(" Prueba de Visión Artificial")
 st.markdown("Este programa sirve para verificar qué está viendo la IA exactamente.")
@@ -30,7 +30,7 @@ if uploaded_file is not None and api_key:
                 genai.configure(api_key=api_key)
                 
                 # Probamos con el modelo estándar estable
-                model = genai.GenerativeModel('gemini-1.5-flash-001')
+                model = genai.GenerativeModel('gemini-1.5-pro')
                 
                 # Prompt simple: Solo transcribe
                 prompt = """
