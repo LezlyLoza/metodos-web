@@ -49,4 +49,4 @@ if uploaded_file is not None and api_key:
 
     except Exception as e:
         st.error(f"⚠️ Ocurrió un error: {e}")
-        st.warning("Si el error dice '404 Not Found', el modelo 'flash' no está disponible para tu clave. Intenta cambiar en el código 'gemini-1.5-flash' por 'gemini-pro-vision'.")
+        st.warning("Si el error dice '404 Not Found', el modelo 'flash' no está disponible para tu clave. Intenta cambiar en el código 'gemini-1g.5-flash' por 'gemini-pro-vision'.")gi
